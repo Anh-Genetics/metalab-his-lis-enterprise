@@ -260,7 +260,7 @@ table.tbl tr:hover td { background: var(--surface-2); }
 
 /* ---- MODAL & TOAST ---- */
 .modal-bg {
-  position: fixed; inset: 0; background: rgba(15,23,42,.56); z-index: 2000;
+  position: fixed; inset: 0; background: rgba(15,23,42,.56); z-index: 12000;
   display: none; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(2px);
 }
 .modal-bg.show { display: flex; }
@@ -270,7 +270,7 @@ table.tbl tr:hover td { background: var(--surface-2); }
 }
 .modal-box.wide { max-width: 960px; }
 .modal-hdr { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
-.toast-wrap { position: fixed; bottom: 18px; right: 18px; z-index: 3500; display: flex; flex-direction: column; gap: 8px; }
+.toast-wrap { position: fixed; bottom: 18px; right: 18px; z-index: 13000; display: flex; flex-direction: column; gap: 8px; }
 .toast { background: #0f172a; color: #fff; padding: 10px 15px; border-radius: 8px; font-size: 12.8px; box-shadow: var(--shadow-lg); max-width: 380px; }
 .toast.ok { background: #065f46; }
 .toast.err { background: #991b1b; }
@@ -641,7 +641,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
     const lr = await cloudRpc('login', { username: u, password: p });
     if (!lr || !lr.ok) {
       FAILED_TRIES++;
-      if (FAILED_TRIES >= 5) { LOCKED_UNTIL = Date.now() + 30000; FAILED_TRIES = 0; }
+      /* Server-side Google DB controls auth state */
       err.textContent = (lr && lr.error) || 'Tên đăng nhập hoặc mật khẩu không chính xác trên Google Database.';
       err.classList.add('show');
       return;
@@ -3631,26 +3631,73 @@ function openPrintSlip(oid, mode) {
 // ==== PATIENT QR PORTAL, GLOBAL SEARCH, NOTIFICATIONS, ONBOARDING ====
 function openPortalModal() {
   openModal('Cổng Tra cứu Kết quả Xét nghiệm Bệnh nhân (QR)', `
+    <p style="font-size:12.5px;color:#475569;margin:0 0 12px;">Nhập <b>Mã Phiếu Xét nghiệm</b> và <b>Mã Tra cứu QR</b> in trên phiếu hẹn để xem kết quả trực tiếp từ Google Database (không cần đăng nhập).</p>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Mã Phiếu Khám</label><input id="ptCode" class="form-control" placeholder="VD: 261119001" /></div>
-      <div class="form-group"><label class="form-label">Mã Tra cứu QR</label><input id="ptTok" class="form-control" placeholder="In trên phiếu chỉ định" /></div>
+      <div class="form-group"><label class="form-label">Mã Phiếu Khám *</label><input id="ptCode" class="form-control" placeholder="VD: 261121001" onkeydown="if(event.key==='Enter')document.getElementById('ptTok').focus()" /></div>
+      <div class="form-group"><label class="form-label">Mã Tra cứu QR *</label><input id="ptTok" class="form-control" placeholder="VD: MT8A1F01" onkeydown="if(event.key==='Enter')doPortalLookup()" /></div>
     </div>
-    <button class="btn btn-accent" onclick="doPortalLookup()">Tra cứu Kết quả</button>
-    <div id="ptRes" style="margin-top:12px;"></div>`, true);
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button id="btnPortalLookup" type="button" class="btn btn-accent" onclick="doPortalLookup()">Tra cứu Kết quả từ Google DB</button>
+      <span style="font-size:11.5px;color:#64748b;">Dữ liệu xác thực trực tuyến từ CSDL_Metalab_HIS_LIS_Enterprise</span>
+    </div>
+    <div id="ptRes" style="margin-top:14px;"></div>`, true);
+  setTimeout(() => { const el = document.getElementById('ptCode'); if (el) el.focus(); }, 60);
 }
 
-function doPortalLookup() {
-  const c = document.getElementById('ptCode').value.trim();
-  const t = document.getElementById('ptTok').value.trim().toUpperCase();
-  const o = STATE.orders.find(x => x.order_code === c && x.lookup_token.toUpperCase() === t);
+async function doPortalLookup() {
+  const c = (document.getElementById('ptCode')?.value || '').trim();
+  const t = (document.getElementById('ptTok')?.value || '').trim().toUpperCase();
   const box = document.getElementById('ptRes');
-  if (!o) { box.innerHTML = '<span class="badge b-danger">Mã phiếu hoặc mã QR không chính xác.</span>'; return; }
-  box.innerHTML = `
-    <div style="background:var(--surface-2);padding:10px;border-radius:8px;margin-bottom:10px;">
-      <b>Bệnh nhân:</b> ${esc(getPatient(o.patient_id).full_name)} • <b>Ngày:</b> ${esc(o.order_date)} • ${statusBadge(o.workflow_status)}
-    </div>
-    <table class="tbl"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Đơn vị</th><th>Tham chiếu</th><th>Cờ</th></tr></thead>
-    <tbody>${o.items.map(i => `<tr><td><b>${esc(i.name)}</b></td><td><b>${o.workflow_status==='RELEASED'?esc(i.result_value):'Đang chờ duyệt'}</b></td><td>${esc(i.unit)}</td><td>${esc(i.ref_range)}</td><td>${o.workflow_status==='RELEASED'?esc(i.abnormal_flag||'-'):'-'}</td></tr>`).join('')}</tbody></table>`;
+  const btn = document.getElementById('btnPortalLookup');
+  if (!c || !t) {
+    box.innerHTML = '<div style="padding:10px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:12.5px;font-weight:600;">Vui lòng nhập đầy đủ Mã Phiếu Khám và Mã Tra cứu QR.</div>';
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Đang tra cứu Google DB...'; }
+  box.innerHTML = '<div style="font-size:12.5px;color:#64748b;">Đang truy vấn trực tiếp từ Google Sheets MasterDB...</div>';
+  try {
+    const res = await cloudRpc('portal_lookup', { order_code: c, token: t });
+    if (!res || !res.ok) {
+      box.innerHTML = `<div style="padding:10px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:12.5px;font-weight:600;">${esc((res && res.error) || 'Mã phiếu hoặc mã tra cứu QR không chính xác.')}</div>`;
+      return;
+    }
+    const o = res.order || {};
+    const pt = res.patient || {};
+    const items = res.items || [];
+    const st = String(o.Workflow_Status || o.workflow_status || '').toUpperCase();
+    const isReleased = (st === 'RELEASED');
+    box.innerHTML = `
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;padding:12px;border-radius:10px;margin-bottom:12px;font-size:13px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px 14px;">
+        <div><b>Bệnh nhân:</b> ${esc(pt.full_name || ('BN #' + (o.Patient_ID || '')))} ${pt.code ? '(' + esc(pt.code) + ')' : ''}</div>
+        <div><b>Năm sinh / GT:</b> ${esc(pt.birth_year || '-')} / ${esc(pt.gender || '-')}</div>
+        <div><b>Mã phiếu:</b> <span style="font-family:monospace;font-weight:700;">${esc(o.Order_Code || c)}</span> • <b>Ngày:</b> ${esc(o.Order_Date || '-')}</div>
+        <div><b>Trạng thái:</b> ${statusBadge(st)} ${res.doctor_name ? '• BS: ' + esc(res.doctor_name) : ''}</div>
+        <div style="grid-column:1/-1;"><b>Chẩn đoán:</b> ${esc(o.Diagnosis || '-')}</div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="tbl">
+          <thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Đơn vị</th><th>Khoảng tham chiếu</th><th>Cờ</th></tr></thead>
+          <tbody>${items.map(i => {
+            const name = i.Test_Name || i.Name || i.name || '-';
+            const val = i.Result_Value !== undefined ? i.Result_Value : (i.result_value || '');
+            const unit = i.Unit || i.unit || '';
+            const ref = i.Ref_Range || i.ref_range || '';
+            const flg = i.Abnormal_Flag || i.abnormal_flag || '';
+            return `<tr>
+              <td><b>${esc(name)}</b></td>
+              <td style="font-weight:700;color:${(flg==='HH'||flg==='LL')?'#dc2626':'#0f172a'};">${isReleased ? esc(val || 'Đã duyệt') : 'Đang chờ duyệt'}</td>
+              <td>${esc(unit)}</td>
+              <td>${esc(ref)}</td>
+              <td><b>${isReleased ? esc(flg || '-') : '-'}</b></td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="5" style="text-align:center;color:#64748b;">Chưa có chỉ số xét nghiệm cho phiếu này.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    box.innerHTML = `<div style="padding:10px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:12.5px;font-weight:600;">Lỗi kết nối Google Database: ${esc(err && err.message ? err.message : err)}</div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Tra cứu Kết quả từ Google DB'; }
+  }
 }
 
 function openGlobalSearch() {
