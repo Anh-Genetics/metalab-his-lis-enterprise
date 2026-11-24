@@ -428,9 +428,10 @@ function safeLsGet(k) { try { return localStorage.getItem(k) || ''; } catch (_) 
 function safeLsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
 
 function buildDefaultState() {
+  const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwAt5oJ_ncUpBDLMjO_pVmkQ_W6e_U1izL9tk4UhQDTgbaGrIgnHsVMy-1y9sSW5sxZSw/exec';
   const savedUrl = (window.METALAB_CONFIG && window.METALAB_CONFIG.GAS_WEBAPP_URL)
     ? window.METALAB_CONFIG.GAS_WEBAPP_URL.trim()
-    : safeLsGet('metalab_gas_url').trim();
+    : (safeLsGet('metalab_gas_url').trim() || DEFAULT_GAS_URL);
   return {
     settings: {
       facility_name: 'TRUNG TÂM XÉT NGHIỆM METALAB',
@@ -663,7 +664,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
       mergeCloudDataIntoState(pulled.data);
       STATE.cloudSyncedAt = pulled.synced_at || '';
       STATE.cloudConnected = true;
-      if (typeof renderView === 'function') renderView();
+      if (typeof updateBadges === 'function') updateBadges(); if (typeof navigate === 'function') navigate(CURRENT_VIEW || (isPartnerUser() ? 'p_dash' : 'dashboard'));
       toast(`Đã tải dữ liệu thực tế từ Google Database (${pulled.synced_at})!`);
     }
   } catch (ex) {
@@ -4434,7 +4435,7 @@ function getActiveGasUrl() {
   const cfg = (window.METALAB_CONFIG && window.METALAB_CONFIG.GAS_WEBAPP_URL) ? window.METALAB_CONFIG.GAS_WEBAPP_URL.trim() : '';
   const st = (typeof STATE !== 'undefined' && STATE.settings && STATE.settings.gas_url) ? String(STATE.settings.gas_url).trim() : '';
   const ls = safeLsGet('metalab_gas_url').trim();
-  return cfg || st || ls || '';
+  return cfg || st || ls || 'https://script.google.com/macros/s/AKfycbwAt5oJ_ncUpBDLMjO_pVmkQ_W6e_U1izL9tk4UhQDTgbaGrIgnHsVMy-1y9sSW5sxZSw/exec';
 }
 
 function getCloudToken() { return CLOUD_TOKEN || ''; }
@@ -4588,7 +4589,7 @@ async function syncGoogleCloud() {
       mergeCloudDataIntoState(r.data);
       STATE.cloudSyncedAt = r.synced_at || '';
       STATE.cloudConnected = true;
-      if (typeof renderView === 'function') renderView();
+      if (typeof updateBadges === 'function') updateBadges(); if (typeof navigate === 'function') navigate(CURRENT_VIEW || (isPartnerUser() ? 'p_dash' : 'dashboard'));
       toast(`Đồng bộ thành công từ Google Sheets MasterDB (${r.synced_at}) — ${STATE.orders.length} phiếu!`);
     } else {
       toast((r && r.error) || 'Không thể đồng bộ Google Database.', 'err');

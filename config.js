@@ -1,6 +1,5 @@
 /**
  * MetaLab HIS-LIS Enterprise v5.5 Zero-Data Pure DB
- * Dán đường dẫn /exec của Google Apps Script Web App vào GAS_WEBAPP_URL bên dưới.
  */
 window.METALAB_CONFIG = {
   APP_NAME: "TRUNG TÂM XÉT NGHIỆM METALAB",
